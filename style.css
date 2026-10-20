@@ -1,0 +1,399 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+/* --------------------------------------------------------------------------
+   Design tokens
+   -------------------------------------------------------------------------- */
+:root {
+  --color-ink: #eff9ff;
+  --color-muted: #8fb2c9;
+  --color-line: rgba(182, 225, 245, 0.2);
+  --color-aqua: #62e8e2;
+  --color-sun: #ffd27d;
+  --color-night: #07152d;
+  --color-shell: #081b3a;
+
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+/* --------------------------------------------------------------------------
+   Base document and canvas
+   -------------------------------------------------------------------------- */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--color-night);
+}
+
+body {
+  overflow: hidden;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+}
+
+button {
+  font: inherit;
+}
+
+.game-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  min-height: 540px;
+  overflow: hidden;
+  background: var(--color-shell);
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Fixed heads-up display
+   -------------------------------------------------------------------------- */
+.hud {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  gap: 34px;
+  padding: 25px clamp(18px, 4vw, 60px);
+  pointer-events: none;
+}
+
+.brand-mark {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-width: 170px;
+  color: #dff8ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.19em;
+}
+
+.brand-drop {
+  color: var(--color-aqua);
+  font-size: 16px;
+  transform: rotate(45deg);
+}
+
+.hud-grid {
+  display: flex;
+  gap: 29px;
+}
+
+.stat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 78px;
+  color: var(--color-muted);
+  font: 11px var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.stat-panel strong {
+  color: var(--color-ink);
+  font: 600 21px var(--font-display);
+  letter-spacing: 0;
+}
+
+.stat-panel strong small {
+  color: var(--color-aqua);
+  font-size: 11px;
+}
+
+.stat-label {
+  margin-bottom: 5px;
+  color: var(--color-aqua);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+.water-panel {
+  min-width: 130px;
+}
+
+.water-panel strong {
+  margin-left: 6px;
+  color: var(--color-sun);
+  font-size: 16px;
+}
+
+.water-panel span:not(.stat-label) {
+  font-size: 10px;
+}
+
+.score-panel {
+  min-width: 100px;
+}
+
+.score-panel strong {
+  color: var(--color-sun);
+}
+
+.hud-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  pointer-events: auto;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--color-line);
+  border-radius: 50%;
+  color: var(--color-ink);
+  background: rgba(7, 21, 45, 0.3);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  border-color: var(--color-aqua);
+  color: var(--color-aqua);
+}
+
+/* --------------------------------------------------------------------------
+   Start, pause, and fall overlays
+   -------------------------------------------------------------------------- */
+.overlay-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 7vh clamp(28px, 11vw, 170px);
+  background: linear-gradient(
+    90deg,
+    rgba(6, 20, 44, 0.95) 0%,
+    rgba(6, 20, 44, 0.78) 45%,
+    rgba(6, 20, 44, 0.08) 100%
+  );
+}
+
+.overlay-screen.is-hidden {
+  display: none;
+}
+
+.title-lockup {
+  max-width: 590px;
+}
+
+.eyebrow {
+  margin: 0 0 17px;
+  color: var(--color-aqua);
+  font: 11px var(--font-mono);
+  letter-spacing: 0.22em;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.07em;
+  line-height: 0.9;
+}
+
+h1 {
+  color: #f2fbff;
+  font-size: clamp(76px, 12vw, 164px);
+}
+
+h1 span {
+  color: var(--color-aqua);
+}
+
+h2 {
+  font-size: clamp(49px, 7vw, 84px);
+}
+
+.title-copy {
+  max-width: 415px;
+  margin: 28px 0 0;
+  color: #b0ccdb;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.instructions {
+  display: flex;
+  gap: 28px;
+  margin-top: 40px;
+  color: var(--color-muted);
+}
+
+.instructions div {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font: 10px var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.instructions b {
+  color: var(--color-ink);
+  font: 500 12px var(--font-mono);
+}
+
+.primary-button {
+  display: inline-flex;
+  gap: 28px;
+  align-items: center;
+  margin-top: 38px;
+  padding: 15px 20px 15px 23px;
+  border: 0;
+  border-radius: 2px;
+  color: #062131;
+  background: var(--color-aqua);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.primary-button:hover {
+  background: #9af4e9;
+  transform: translateY(-2px);
+}
+
+.primary-button span {
+  font-size: 19px;
+}
+
+.start-note {
+  margin: 17px 0 0;
+  color: #789bb3;
+  font: 10px var(--font-mono);
+}
+
+.overlay-screen > p:not(.eyebrow) {
+  color: var(--color-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Floating gameplay messages
+   -------------------------------------------------------------------------- */
+.message-stack {
+  position: absolute;
+  top: 112px;
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.float-message {
+  color: var(--color-sun);
+  font: 700 14px var(--font-mono);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  animation: float-up 1.35s ease-out forwards;
+}
+
+@keyframes float-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-28px);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Touch controls
+   -------------------------------------------------------------------------- */
+.touch-controls {
+  position: absolute;
+  right: 20px;
+  bottom: 22px;
+  z-index: 4;
+  display: none;
+  gap: 8px;
+}
+
+.touch-controls button {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--color-line);
+  border-radius: 50%;
+  color: var(--color-ink);
+  background: rgba(7, 21, 45, 0.55);
+}
+
+/* --------------------------------------------------------------------------
+   Small-screen layout adjustments
+   -------------------------------------------------------------------------- */
+@media (max-width: 700px) {
+  .hud {
+    gap: 13px;
+    padding: 17px 16px;
+  }
+
+  .brand-mark {
+    min-width: auto;
+    font-size: 10px;
+  }
+
+  .hud-grid {
+    gap: 13px;
+  }
+
+  .water-panel {
+    min-width: 84px;
+  }
+
+  .score-panel {
+    min-width: 50px;
+  }
+
+  .stat-panel strong {
+    font-size: 16px;
+  }
+
+  .hud-actions {
+    position: absolute;
+    top: 72px;
+    right: 16px;
+  }
+
+  .overlay-screen {
+    justify-content: center;
+    padding: 30px;
+    background: rgba(6, 20, 44, 0.79);
+  }
+
+  .title-copy {
+    font-size: 14px;
+  }
+
+  .instructions {
+    gap: 15px;
+    margin-top: 30px;
+  }
+
+  .touch-controls {
+    display: flex;
+  }
+}
