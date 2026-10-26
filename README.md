@@ -1,6 +1,6 @@
 # Cloudwell
 
-Cloudwell is a small, original vertical platforming game built with HTML5 Canvas, CSS, and vanilla JavaScript. Climb through a procedurally extended sky, collect water droplets, and reach a glowing storage station before a fall costs your unbanked water.
+Cloudwell is a small, original vertical platforming game built with HTML5 Canvas, CSS, and vanilla JavaScript. Climb through a procedurally extended sky, collect water droplets, and reach a glowing storage station before a fall costs your unbanked water. The game features charity: water-inspired clean-water branding and themes.
 
 ## Run
 
@@ -18,9 +18,10 @@ Then visit `http://localhost:4173`.
 - `Space` / `Up`: jump, with variable jump height
 - `S` / `Down`: bank water at a glowing station
 - `P`: pause
+- `↻`: reset the game and start a new run
 - `♫`: mute or unmute Web Audio effects
 
-Stored water is permanent. Unbanked water is lost when the player falls, while the last storage station becomes the next respawn point. Reaching altitude milestones adds bonus score.
+Stored water is permanent. Platforms and their off-screen droplets disappear after they scroll below the viewport, so falling past the visible ledges ends the run. Avoid garbage on platforms: touching pollution removes one unbanked drop, while stored water remains safe. Reaching 750 points displays a win screen with the option to continue climbing. Unbanked water is also lost when the player falls, while the last storage station becomes the next respawn point.
 
 ## Project layout
 
@@ -28,4 +29,4 @@ Stored water is permanent. Unbanked water is lost when the player falls, while t
 - `style.css`: responsive visual system and overlays
 - `game.js`: input, physics, procedural generation, camera, collisions, audio, particles, and rendering
 
-The `TUNE` object at the top of `game.js` is the main manual adjustment surface for movement feel, jump arc, platform spacing, and generation distance.
+The `TUNE` object at the top of `game.js` is the main manual adjustment surface for movement feel, jump arc, platform spacing, generation distance, and droplet spawn rates.

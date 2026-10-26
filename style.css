@@ -25,6 +25,7 @@
 
 html,
 body {
+  height: 100%;
   min-height: 100%;
   margin: 0;
   background: var(--color-night);
@@ -34,6 +35,7 @@ body {
   overflow: hidden;
   color: var(--color-ink);
   font-family: var(--font-display);
+  overscroll-behavior: none;
 }
 
 button {
@@ -44,7 +46,8 @@ button {
   position: relative;
   width: 100vw;
   height: 100vh;
-  min-height: 540px;
+  height: 100dvh;
+  min-height: 100svh;
   overflow: hidden;
   background: var(--color-shell);
 }
@@ -64,7 +67,8 @@ canvas {
   z-index: 3;
   display: flex;
   align-items: flex-start;
-  gap: 34px;
+  gap: 10px;
+  flex-wrap: wrap;
   padding: 25px clamp(18px, 4vw, 60px);
   pointer-events: none;
 }
@@ -73,7 +77,8 @@ canvas {
   display: flex;
   gap: 9px;
   align-items: center;
-  min-width: 170px;
+  min-width: 0;
+  width: 100%;
   color: #dff8ff;
   font-size: 12px;
   font-weight: 700;
@@ -88,14 +93,15 @@ canvas {
 
 .hud-grid {
   display: flex;
-  gap: 29px;
+  flex: 1;
+  gap: 10px;
 }
 
 .stat-panel {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  min-width: 78px;
+  min-width: 0;
   color: var(--color-muted);
   font: 11px var(--font-mono);
   letter-spacing: 0.04em;
@@ -120,7 +126,8 @@ canvas {
 }
 
 .water-panel {
-  min-width: 130px;
+  flex: 1.5;
+  min-width: 0;
 }
 
 .water-panel strong {
@@ -134,7 +141,8 @@ canvas {
 }
 
 .score-panel {
-  min-width: 100px;
+  flex: 1;
+  min-width: 0;
 }
 
 .score-panel strong {
@@ -142,6 +150,9 @@ canvas {
 }
 
 .hud-actions {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
   display: flex;
   gap: 8px;
   margin-left: auto;
@@ -174,7 +185,7 @@ canvas {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  padding: 7vh clamp(28px, 11vw, 170px);
+  padding: max(28px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
   background: linear-gradient(
     90deg,
     rgba(6, 20, 44, 0.95) 0%,
@@ -185,6 +196,55 @@ canvas {
 
 .overlay-screen.is-hidden {
   display: none;
+}
+
+.win-screen {
+  align-items: center;
+  text-align: center;
+  background: radial-gradient(circle at center, rgba(25, 100, 126, 0.7), rgba(6, 20, 44, 0.96) 62%);
+}
+
+.win-screen .eyebrow {
+  color: var(--color-sun);
+}
+
+.win-screen h2 {
+  color: var(--color-aqua);
+  font-size: clamp(56px, 14vw, 104px);
+  letter-spacing: -0.08em;
+}
+
+.win-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 25px 0 4px;
+  padding: 12px 26px 10px;
+  border: 2px solid var(--color-sun);
+  border-radius: 4px;
+  color: var(--color-sun);
+  box-shadow: 0 0 28px rgba(255, 210, 125, 0.22);
+}
+
+.win-score strong {
+  font-size: 38px;
+  line-height: 1;
+}
+
+.win-score span {
+  margin-top: 5px;
+  font: 10px var(--font-mono);
+  letter-spacing: 0.2em;
+}
+
+.win-screen > p:not(.eyebrow) {
+  max-width: 430px;
+  margin: 20px 0 0;
+  line-height: 1.5;
+}
+
+.win-screen .primary-button {
+  margin-top: 28px;
 }
 
 .title-lockup {
@@ -208,7 +268,7 @@ h2 {
 
 h1 {
   color: #f2fbff;
-  font-size: clamp(76px, 12vw, 164px);
+  font-size: clamp(52px, 18vw, 96px);
 }
 
 h1 span {
@@ -216,7 +276,7 @@ h1 span {
 }
 
 h2 {
-  font-size: clamp(49px, 7vw, 84px);
+  font-size: clamp(42px, 11vw, 68px);
 }
 
 .title-copy {
@@ -227,10 +287,28 @@ h2 {
   line-height: 1.55;
 }
 
+.charity-water-mark {
+  display: inline-flex;
+  gap: 5px;
+  align-items: baseline;
+  margin-top: 26px;
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 210, 125, 0.5);
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.charity-water-mark span {
+  color: var(--color-sun);
+}
+
 .instructions {
   display: flex;
-  gap: 28px;
-  margin-top: 40px;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 30px;
   color: var(--color-muted);
 }
 
@@ -326,62 +404,73 @@ h2 {
    -------------------------------------------------------------------------- */
 .touch-controls {
   position: absolute;
-  right: 20px;
-  bottom: 22px;
+  left: max(14px, env(safe-area-inset-left));
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
   z-index: 4;
-  display: none;
+  display: flex;
+  justify-content: space-between;
   gap: 8px;
+  pointer-events: none;
 }
 
 .touch-controls button {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border: 1px solid var(--color-line);
   border-radius: 50%;
   color: var(--color-ink);
   background: rgba(7, 21, 45, 0.55);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
 }
 
-/* --------------------------------------------------------------------------
-   Small-screen layout adjustments
-   -------------------------------------------------------------------------- */
-@media (max-width: 700px) {
+@media (min-width: 701px) {
   .hud {
-    gap: 13px;
-    padding: 17px 16px;
+    flex-wrap: nowrap;
+    gap: 34px;
+    padding: 25px clamp(18px, 4vw, 60px);
   }
 
   .brand-mark {
-    min-width: auto;
-    font-size: 10px;
+    width: auto;
+    min-width: 170px;
+    font-size: 12px;
   }
 
   .hud-grid {
-    gap: 13px;
+    flex: none;
+    gap: 29px;
   }
 
   .water-panel {
-    min-width: 84px;
+    flex: none;
+    min-width: 130px;
   }
 
   .score-panel {
-    min-width: 50px;
+    flex: none;
+    min-width: 100px;
   }
 
   .stat-panel strong {
-    font-size: 16px;
+    font-size: 21px;
   }
 
   .hud-actions {
-    position: absolute;
-    top: 72px;
-    right: 16px;
+    position: static;
   }
 
   .overlay-screen {
     justify-content: center;
-    padding: 30px;
-    background: rgba(6, 20, 44, 0.79);
+    padding: 7vh clamp(28px, 11vw, 170px);
+    background: linear-gradient(
+      90deg,
+      rgba(6, 20, 44, 0.95) 0%,
+      rgba(6, 20, 44, 0.78) 45%,
+      rgba(6, 20, 44, 0.08) 100%
+    );
   }
 
   .title-copy {
@@ -389,11 +478,16 @@ h2 {
   }
 
   .instructions {
-    gap: 15px;
-    margin-top: 30px;
+    flex-wrap: nowrap;
+    gap: 28px;
+    margin-top: 40px;
   }
 
   .touch-controls {
-    display: flex;
+    left: auto;
+    right: 20px;
+    bottom: 22px;
+    justify-content: initial;
+    display: none;
   }
 }

@@ -10,6 +10,8 @@
     playerWidth: 25,
     playerHeight: 35,
     platformGap: 92,
+    dropletSpawnChance: 0.62,
+    extraDropletChance: 0.3,
     fallLimit: 220,
     generationAhead: 1200,
     maxDt: 0.033
@@ -23,7 +25,11 @@
     particle: '#b9ffff',
     platformTop: '#8ee1d6',
     station: '#ffd27d',
-    stationOpening: '#143154'
+    stationOpening: '#143154',
+    pollution: '#6f7b68',
+    pollutionHighlight: '#b6c48d',
+    pollutionWarning: '#ff806f',
+    tankWater: '#62d9e8'
   };
 
   const canvas = document.getElementById('gameCanvas');
@@ -37,6 +43,7 @@
     scoreValue: document.getElementById('scoreValue'),
     startScreen: document.getElementById('startScreen'),
     pauseScreen: document.getElementById('pauseScreen'),
+    winScreen: document.getElementById('winScreen'),
     fallScreen: document.getElementById('fallScreen'),
     messageStack: document.getElementById('messageStack')
   };
@@ -244,16 +251,44 @@
       this.unbanked = 0;
       this.score = 0;
       this.maxHeight = 0;
+      this.winShown = false;
       this.lastTime = 0;
       this.time = 0;
       this.highestGenerated = 0;
       this.checkpoint = { x: 540, y: 510 };
+      this.checkpointPlatform = null;
       this.player = new Player(this.checkpoint.x, this.checkpoint.y);
 
       this.resize();
       this.generateInitialLevel();
       this.bindEvents();
       requestAnimationFrame((time) => this.loop(time));
+    }
+
+    resetGame() {
+      keys.clear();
+      this.state = 'start';
+      this.stored = 0;
+      this.unbanked = 0;
+      this.score = 0;
+      this.maxHeight = 0;
+      this.winShown = false;
+      this.lastTime = 0;
+      this.time = 0;
+      this.highestGenerated = 0;
+      this.checkpoint = { x: 540, y: 510 };
+      this.checkpointPlatform = null;
+      this.platforms = [];
+      this.droplets = [];
+      this.particles = [];
+      this.camera = { x: 0, y: 0 };
+      this.player = new Player(this.checkpoint.x, this.checkpoint.y);
+      this.generateInitialLevel();
+      ui.startScreen.classList.remove('is-hidden');
+      ui.pauseScreen.classList.add('is-hidden');
+      ui.winScreen.classList.add('is-hidden');
+      ui.fallScreen.classList.add('is-hidden');
+      ui.messageStack.replaceChildren();
     }
 
     resize() {
@@ -267,7 +302,9 @@
     }
 
     generateInitialLevel() {
-      this.platforms.push({ x: 390, y: 570, width: 320, height: 18, hue: 184, moving: false });
+      const startingPlatform = { x: 390, y: 570, width: 320, height: 18, hue: 184, moving: false };
+      this.platforms.push(startingPlatform);
+      this.checkpointPlatform = { ...startingPlatform };
       this.highestGenerated = 570;
 
       for (let platformY = 478; platformY > -2600; platformY -= TUNE.platformGap) {
@@ -305,18 +342,33 @@
 
       this.platforms.push(platform);
 
-      const dropCount = Math.random() < 0.48 ? 2 : 1;
-      for (let dropIndex = 0; dropIndex < dropCount; dropIndex += 1) {
-        this.droplets.push({
-          x: platformX + platformWidth * (dropIndex + 1) / (dropCount + 1),
-          y: platformY - randomBetween(24, 46),
-          taken: false,
-          phase: randomBetween(0, 7)
-        });
+      if (Math.random() < TUNE.dropletSpawnChance) {
+        const dropCount = Math.random() < TUNE.extraDropletChance ? 2 : 1;
+        for (let dropIndex = 0; dropIndex < dropCount; dropIndex += 1) {
+          this.droplets.push({
+            x: platformX + platformWidth * (dropIndex + 1) / (dropCount + 1),
+            y: platformY - randomBetween(24, 46),
+            taken: false,
+            phase: randomBetween(0, 7)
+          });
+        }
       }
 
       if (Math.random() < 0.16) {
         platform.station = true;
+      }
+
+      if (!platform.station && Math.random() < 0.22) {
+        const pollutionWidth = 24;
+        platform.pollution = {
+          x: platformX + randomBetween(16, platformWidth - pollutionWidth - 16),
+          y: platformY - 13,
+          width: pollutionWidth,
+          height: 13,
+          offsetX: 0,
+          cleared: false
+        };
+        platform.pollution.offsetX = platform.pollution.x - platformX;
       }
     }
 
@@ -338,8 +390,13 @@
         ui.startScreen.classList.add('is-hidden');
       };
       document.getElementById('resumeButton').onclick = () => this.togglePause();
+      document.getElementById('continueButton').onclick = () => {
+        this.state = 'playing';
+        ui.winScreen.classList.add('is-hidden');
+      };
       document.getElementById('respawnButton').onclick = () => this.respawn();
       document.getElementById('pauseButton').onclick = () => this.togglePause();
+      document.getElementById('resetButton').onclick = () => this.resetGame();
       document.getElementById('muteButton').onclick = (event) => {
         this.sound.muted = !this.sound.muted;
         event.currentTarget.textContent = this.sound.muted ? '×' : '♫';
@@ -375,6 +432,7 @@
       });
       button.addEventListener('pointerup', () => keys.delete(key));
       button.addEventListener('pointerleave', () => keys.delete(key));
+      button.addEventListener('pointercancel', () => keys.delete(key));
     }
 
     togglePause() {
@@ -410,6 +468,7 @@
         x: station.x + station.width / 2 - this.player.width / 2,
         y: station.y - this.player.height
       };
+      this.checkpointPlatform = { ...station };
 
       this.sound.beep(620, 0.16, 'sine');
       this.message(`BANKED +${amount} / SAFE`, COLORS.player);
@@ -437,6 +496,33 @@
       }
     }
 
+    handlePollution() {
+      for (const platform of this.platforms) {
+        const pollution = platform.pollution;
+        if (!pollution || pollution.cleared) {
+          continue;
+        }
+
+        const overlaps = this.player.x < pollution.x + pollution.width
+          && this.player.x + this.player.width > pollution.x
+          && this.player.y < pollution.y + pollution.height
+          && this.player.y + this.player.height > pollution.y;
+        if (!overlaps) {
+          continue;
+        }
+
+        pollution.cleared = true;
+        if (this.unbanked > 0) {
+          this.unbanked -= 1;
+          this.message('-1 DROP', COLORS.pollutionHighlight);
+        } else {
+          this.message('POLLUTION', COLORS.pollutionHighlight);
+        }
+        this.sound.beep(120, 0.1, 'square');
+        this.createParticles(pollution.x + pollution.width / 2, pollution.y, COLORS.pollutionHighlight, 8, 75);
+      }
+    }
+
     createParticles(x, y, color, count, speed) {
       for (let particleIndex = 0; particleIndex < count; particleIndex += 1) {
         this.particles.push(new Particle(x, y, color, speed));
@@ -447,6 +533,7 @@
       this.state = 'playing';
       ui.fallScreen.classList.add('is-hidden');
       this.unbanked = 0;
+      this.restoreCheckpointPlatform();
       this.player.x = this.checkpoint.x;
       this.player.y = this.checkpoint.y;
       this.player.velocityX = 0;
@@ -459,6 +546,22 @@
       ui.fallScreen.classList.remove('is-hidden');
       this.unbanked = 0;
       this.sound.beep(90, 0.25, 'sawtooth');
+    }
+
+    restoreCheckpointPlatform() {
+      if (!this.checkpointPlatform) {
+        return;
+      }
+
+      const platformExists = this.platforms.some((platform) => (
+        platform.x === this.checkpointPlatform.x
+        && platform.y === this.checkpointPlatform.y
+        && platform.width === this.checkpointPlatform.width
+      ));
+
+      if (!platformExists) {
+        this.platforms.unshift({ ...this.checkpointPlatform });
+      }
     }
 
     message(text, color = COLORS.accent) {
@@ -475,10 +578,13 @@
       this.updateMovingPlatforms();
       this.player.update(this, deltaTime);
       this.collectDroplets();
+      this.handlePollution();
       this.generateMorePlatforms();
       this.updateHeightAndScore();
       this.updateCamera(deltaTime);
+      this.removeOutOfViewPlatforms();
       this.updateParticles(deltaTime);
+      this.checkWinCondition();
 
       if (this.player.y - this.camera.y > this.viewHeight + TUNE.fallLimit) {
         this.fall();
@@ -490,7 +596,16 @@
         if (platform.moving) {
           platform.x = platform.baseX + Math.sin(this.time * 0.8 + platform.phase) * platform.range;
         }
+        if (platform.pollution) {
+          platform.pollution.x = platform.x + platform.pollution.offsetX;
+        }
       }
+    }
+
+    removeOutOfViewPlatforms() {
+      const lowestVisibleY = this.camera.y + this.viewHeight;
+      this.platforms = this.platforms.filter((platform) => platform.y <= lowestVisibleY);
+      this.droplets = this.droplets.filter((droplet) => !droplet.taken && droplet.y <= lowestVisibleY);
     }
 
     updateHeightAndScore() {
@@ -505,6 +620,17 @@
         this.sound.beep(800, 0.12, 'triangle');
       }
       this.maxHeight = height;
+    }
+
+    checkWinCondition() {
+      if (this.winShown || this.score < 750) {
+        return;
+      }
+
+      this.winShown = true;
+      this.state = 'won';
+      ui.winScreen.classList.remove('is-hidden');
+      this.sound.beep(740, 0.14, 'sine');
     }
 
     updateCamera(deltaTime) {
@@ -573,10 +699,58 @@
         context.fillRect(platform.x, platform.y, platform.width, 4);
 
         if (platform.station) {
+          const tankX = platform.x + platform.width / 2 - 19;
+          const tankY = platform.y - 29;
+
           context.fillStyle = COLORS.station;
-          context.fillRect(platform.x + platform.width / 2 - 15, platform.y - 15, 30, 15);
+          context.fillRect(tankX, tankY + 5, 38, 24);
+          context.beginPath();
+          context.arc(platform.x + platform.width / 2, tankY + 5, 19, Math.PI, 0);
+          context.fill();
+          context.fillStyle = COLORS.tankWater;
+          context.fillRect(tankX + 4, tankY + 16, 30, 9);
           context.fillStyle = COLORS.stationOpening;
-          context.fillRect(platform.x + platform.width / 2 - 5, platform.y - 11, 10, 7);
+          context.fillRect(tankX + 12, tankY, 14, 6);
+          context.strokeStyle = COLORS.stationOpening;
+          context.lineWidth = 2;
+          context.strokeRect(tankX, tankY + 5, 38, 24);
+
+          context.fillStyle = COLORS.playerHighlight;
+          context.beginPath();
+          context.moveTo(platform.x + platform.width / 2, tankY + 9);
+          context.quadraticCurveTo(platform.x + platform.width / 2 + 5, tankY + 15, platform.x + platform.width / 2, tankY + 19);
+          context.quadraticCurveTo(platform.x + platform.width / 2 - 5, tankY + 15, platform.x + platform.width / 2, tankY + 9);
+          context.fill();
+        }
+
+        const pollution = platform.pollution;
+        if (pollution && !pollution.cleared) {
+          const trashX = pollution.x;
+          const trashY = pollution.y;
+
+          context.fillStyle = COLORS.pollution;
+          context.fillRect(trashX + 3, trashY + 3, pollution.width - 6, pollution.height);
+          context.fillStyle = COLORS.pollutionHighlight;
+          context.fillRect(trashX, trashY, pollution.width, 4);
+          context.fillRect(trashX + 8, trashY - 4, 8, 4);
+          context.strokeStyle = COLORS.pollutionHighlight;
+          context.lineWidth = 2;
+          context.beginPath();
+          context.moveTo(trashX + 8, trashY + 7);
+          context.lineTo(trashX + 8, trashY + 12);
+          context.moveTo(trashX + 16, trashY + 7);
+          context.lineTo(trashX + 16, trashY + 12);
+          context.stroke();
+
+          context.fillStyle = COLORS.pollutionWarning;
+          context.beginPath();
+          context.arc(trashX + pollution.width + 5, trashY - 2, 7, 0, Math.PI * 2);
+          context.fill();
+          context.fillStyle = COLORS.stationOpening;
+          context.font = 'bold 10px sans-serif';
+          context.textAlign = 'center';
+          context.textBaseline = 'middle';
+          context.fillText('!', trashX + pollution.width + 5, trashY - 2);
         }
       }
 
