@@ -537,7 +537,6 @@
         y: this.startingY,
         width: startingPlatformWidth,
         height: clamp(18 * this.ledgeScale, 14, 22),
-        hue: 184,
         moving: false,
         type: PLATFORM_TYPES.NORMAL,
         state: 'stable',
@@ -592,7 +591,6 @@
         width: platformWidth,
         widthFactor,
         height: clamp(16 * this.ledgeScale, 12, 20),
-        hue: 182 + randomBetween(-18, 22),
         moving: false,
         phase: randomBetween(0, 7),
         range: randomBetween(35, 90)
@@ -1094,26 +1092,7 @@
           : 0;
         const drawX = platform.x + shake;
         const drawY = platform.y + (platform.state === 'breaking' ? platform.fallOffset : 0);
-        const platformHue = platform.type === PLATFORM_TYPES.MOVING
-          ? 205
-          : platform.type === PLATFORM_TYPES.SMALL
-            ? 270
-            : platform.hue;
-
-        context.save();
-        context.shadowColor = 'rgba(3, 15, 35, 0.38)';
-        context.shadowBlur = 0;
-        context.shadowOffsetY = 4;
-        context.fillStyle = `hsl(${platformHue}, 48%, 39%)`;
-        this.drawRoundedRect(drawX, drawY, platform.width, platform.height, 3);
-        context.fill();
-        context.shadowColor = 'transparent';
-        context.fillStyle = isCracking ? COLORS.crumbleWarning : COLORS.platformTop;
-        this.drawRoundedRect(drawX, drawY, platform.width, 4, 2);
-        context.fill();
-        context.fillStyle = 'rgba(255, 255, 255, 0.12)';
-        context.fillRect(drawX + 5, drawY + platform.height - 3, Math.max(0, platform.width - 10), 1);
-        context.restore();
+        this.drawPlatformBase(drawX, drawY, platform.width, platform.height, isCracking);
 
         if (platform.type === PLATFORM_TYPES.MOVING) {
           context.strokeStyle = '#b7d8ff';
@@ -1217,6 +1196,23 @@
       context.lineTo(x, y + radius);
       context.quadraticCurveTo(x, y, x + radius, y);
       context.closePath();
+    }
+
+    drawPlatformBase(x, y, width, height, isCracking) {
+      context.save();
+      context.shadowColor = 'rgba(3, 15, 35, 0.38)';
+      context.shadowBlur = 0;
+      context.shadowOffsetY = 4;
+      context.fillStyle = COLORS.station;
+      this.drawRoundedRect(x, y, width, height, 3);
+      context.fill();
+      context.shadowColor = 'transparent';
+      context.fillStyle = isCracking ? COLORS.crumbleWarning : COLORS.tankWater;
+      this.drawRoundedRect(x, y, width, 4, 2);
+      context.fill();
+      context.fillStyle = 'rgba(255, 255, 255, 0.18)';
+      context.fillRect(x + 5, y + height - 3, Math.max(0, width - 10), 1);
+      context.restore();
     }
 
     drawDroplets() {
