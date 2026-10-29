@@ -16,18 +16,28 @@
 				<section class="stat-panel water-panel"><span class="stat-label">WATER</span><span>Stored <strong id="storedValue">0</strong></span><span>Unbanked <strong id="unbankedValue">0</strong></span></section>
 				<section class="stat-panel"><span class="stat-label">ALTITUDE</span><strong><span id="heightValue">0</span><small> m</small></strong></section>
 				<section class="stat-panel score-panel"><span class="stat-label">SCORE</span><strong id="scoreValue">0</strong></section>
+				<section class="stat-panel difficulty-panel"><span class="stat-label">MODE</span><strong id="difficultyValue">Normal</strong></section>
 			</div>
 			<div class="hud-actions"><button id="resetButton" class="icon-button" type="button" aria-label="Reset game">↻</button><button id="muteButton" class="icon-button" type="button" aria-label="Mute sound">♫</button><button id="pauseButton" class="icon-button" type="button" aria-label="Pause game">Ⅱ</button></div>
 		</header>
 		<div id="messageStack" class="message-stack" aria-live="polite"></div>
 		<section id="startScreen" class="overlay-screen">
 			<div class="title-lockup"><p class="eyebrow">THE SKY HAS A THIRST</p><h1>Cloud<span>well</span></h1><p class="title-copy">Climb the weather line. Catch every drop. Make it back to a well before the sky takes it all.</p><div class="charity-water-mark" aria-label="charity: water"><span>charity:</span> water</div></div>
+			<fieldset class="difficulty-picker">
+				<legend>Choose your ascent</legend>
+				<div class="difficulty-options">
+					<label><input type="radio" name="difficulty" value="easy"><span>Easy</span><small>More room to learn</small></label>
+					<label><input type="radio" name="difficulty" value="normal" checked><span>Normal</span><small>Balanced challenge</small></label>
+					<label><input type="radio" name="difficulty" value="hard"><span>Hard</span><small>For a sharper climb</small></label>
+				</div>
+			</fieldset>
 			<div class="instructions"><div><b>← →</b><span>Move</span></div><div><b>SPACE</b><span>Jump</span></div><div><b>S / ↓</b><span>Bank water</span></div><div><b>P</b><span>Pause</span></div></div>
 			<button id="startButton" class="primary-button" type="button">Begin ascent <span>↗</span></button><p class="start-note">A short climb is safer. A high climb is worth more.</p>
+			<p class="charity-links"><a href="https://www.charitywater.org/" target="_blank" rel="noopener noreferrer" aria-label="Learn more about charity: water (opens in a new tab)">Learn more about charity: water <span aria-hidden="true">↗</span></a><a href="https://www.charitywater.org/donate" target="_blank" rel="noopener noreferrer" aria-label="Donate to help bring clean water to communities (opens in a new tab)">Donate to help bring clean water to communities <span aria-hidden="true">↗</span></a></p>
 		</section>
 		<section id="pauseScreen" class="overlay-screen is-hidden"><p class="eyebrow">ASCENT ON HOLD</p><h2>Take a breath.</h2><p>Your water is safe while paused.</p><button id="resumeButton" class="primary-button" type="button">Resume <span>↗</span></button></section>
-		<section id="winScreen" class="overlay-screen win-screen is-hidden"><p class="eyebrow">750-POINT GOAL COMPLETE</p><h2>YOU WIN!</h2><div class="win-score" aria-label="750 points"><strong>750</strong><span>POINTS</span></div><p>You reached the Cloudwell goal. Continue climbing or celebrate your clean-water victory.</p><button id="continueButton" class="primary-button" type="button">Continue ascent <span>↗</span></button></section>
-		<section id="fallScreen" class="overlay-screen is-hidden"><p class="eyebrow">THE DROP GOT AWAY</p><h2>Back to the last well.</h2><p>You kept your stored water, but the unbanked drops are gone.</p><button id="respawnButton" class="primary-button" type="button">Try the next ledge <span>↗</span></button></section>
+		<section id="winScreen" class="overlay-screen win-screen is-hidden"><p class="eyebrow"><span id="winGoalLabel">750</span>-POINT GOAL COMPLETE</p><h2>YOU WIN!</h2><div class="win-score" aria-label="Current score"><strong id="winScoreValue">0</strong><span>POINTS</span></div><p>You reached the Cloudwell goal. Continue climbing or celebrate your clean-water victory.</p><button id="continueButton" class="primary-button" type="button">Continue ascent <span>↗</span></button><p class="charity-links"><a href="https://www.charitywater.org/" target="_blank" rel="noopener noreferrer" aria-label="Learn more about charity: water (opens in a new tab)">Learn more about charity: water <span aria-hidden="true">↗</span></a><a href="https://www.charitywater.org/donate" target="_blank" rel="noopener noreferrer" aria-label="Donate to help bring clean water to communities (opens in a new tab)">Donate to help bring clean water to communities <span aria-hidden="true">↗</span></a></p></section>
+		<section id="fallScreen" class="overlay-screen is-hidden"><p class="eyebrow">RUN OVER</p><h2>Back to the start.</h2><div class="fall-score"><strong id="finalScoreValue">0</strong><span>FINAL SCORE</span></div><p id="fallSummary">Your next ascent is ready.</p><button id="respawnButton" class="primary-button" type="button">Start a new run <span>↗</span></button></section>
 		<div class="touch-controls" aria-label="Touch controls"><div class="touch-movement"><button id="leftTouch" type="button" aria-label="Move left">←</button><button id="rightTouch" type="button" aria-label="Move right">→</button></div><div class="touch-actions"><button id="jumpTouch" type="button" aria-label="Jump">↑</button><button id="bankTouch" type="button" aria-label="Bank water">S</button></div></div>
 	</main>
 	<script src="game.js"></script>

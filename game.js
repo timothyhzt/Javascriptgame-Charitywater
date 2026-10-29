@@ -14,6 +14,11 @@
     extraDropletChance: 0.3,
     fallLimit: 220,
     generationAhead: 1200,
+    crumblingPlatform: {
+      warningDuration: 1.45,
+      breakingDuration: 0.45,
+      fallSpeed: 115
+    },
     platformSizing: {
       referenceWidth: 1100,
       minimumScale: 0.62,
@@ -29,6 +34,11 @@
     maxDt: 0.033
   };
 
+  const ANIMATION_TIMING = {
+    fastFeedback: 1400,
+    landingParticles: 6
+  };
+
   const COLORS = {
     player: '#62e8e2',
     playerHighlight: '#dffaff',
@@ -41,7 +51,55 @@
     pollution: '#6f7b68',
     pollutionHighlight: '#b6c48d',
     pollutionWarning: '#ff806f',
-    tankWater: '#62d9e8'
+    tankWater: '#62d9e8',
+    crumbleWarning: '#ffcf7a',
+    crumbleCrack: '#ff806f'
+  };
+
+  const PLATFORM_TYPES = {
+    NORMAL: 'normal',
+    CRUMBLING: 'crumbling',
+    MOVING: 'moving',
+    SMALL: 'small'
+  };
+
+  const DIFFICULTIES = {
+    easy: {
+      label: 'Easy',
+      breakingPlatformChance: 0.1,
+      platformScale: 1.16,
+      platformGap: 88,
+      crumbleWarningDuration: 1.9,
+      crumbleBreakingDuration: 0.6,
+      hazardFrequency: 0.12,
+      dropletSpawnChance: 0.78,
+      extraDropletChance: 0.42,
+      winScore: 550
+    },
+    normal: {
+      label: 'Normal',
+      breakingPlatformChance: 0.1,
+      platformScale: 1,
+      platformGap: 92,
+      crumbleWarningDuration: 1.45,
+      crumbleBreakingDuration: 0.45,
+      hazardFrequency: 0.22,
+      dropletSpawnChance: 0.62,
+      extraDropletChance: 0.3,
+      winScore: 750
+    },
+    hard: {
+      label: 'Hard',
+      breakingPlatformChance: 1,
+      platformScale: 0.86,
+      platformGap: 96,
+      crumbleWarningDuration: 1.05,
+      crumbleBreakingDuration: 0.32,
+      hazardFrequency: 0.34,
+      dropletSpawnChance: 0.52,
+      extraDropletChance: 0.22,
+      winScore: 1000
+    }
   };
 
   const canvas = document.getElementById('gameCanvas');
@@ -57,7 +115,12 @@
     pauseScreen: document.getElementById('pauseScreen'),
     winScreen: document.getElementById('winScreen'),
     fallScreen: document.getElementById('fallScreen'),
-    messageStack: document.getElementById('messageStack')
+    messageStack: document.getElementById('messageStack'),
+    fallSummary: document.getElementById('fallSummary'),
+    finalScoreValue: document.getElementById('finalScoreValue'),
+    difficultyValue: document.getElementById('difficultyValue'),
+    winGoalLabel: document.getElementById('winGoalLabel'),
+    winScoreValue: document.getElementById('winScoreValue')
   };
 
   const randomBetween = (minimum, maximum) => minimum + Math.random() * (maximum - minimum);
@@ -162,15 +225,21 @@
 
       this.x += this.velocityX * deltaTime;
       this.y += this.velocityY * deltaTime;
+      const currentBottom = this.y + this.height;
       this.x = clamp(this.x, 8, game.worldWidth - this.width - 8);
       this.grounded = false;
 
       for (const platform of game.platforms) {
         const missesHorizontally = platform.x + platform.width < this.x || platform.x > this.x + this.width;
-        const hasPassedPlatform = previousBottom > platform.y + 5;
-        const isAbovePlatform = this.y + this.height < platform.y;
+        const hasPassedPlatform = previousBottom > platform.y + 2;
+        const hasCrossedPlatformTop = previousBottom <= platform.y + 2 && currentBottom >= platform.y;
 
-        if (missesHorizontally || hasPassedPlatform || isAbovePlatform || this.velocityY < 0) {
+        if (platform.state === 'destroyed'
+          || game.destroyedPlatformIds.has(platform.id)
+          || missesHorizontally
+          || hasPassedPlatform
+          || !hasCrossedPlatformTop
+          || this.velocityY < 0) {
           continue;
         }
 
@@ -179,8 +248,13 @@
         this.grounded = true;
         this.squash = 1.16;
 
+        if (platform.type === PLATFORM_TYPES.CRUMBLING && platform.state === 'stable') {
+          game.startCrumble(platform);
+        }
+
         if (!this.lastLand) {
           game.sound.beep(180, 0.045, 'triangle');
+          game.createParticles(this.x + this.width / 2, platform.y, COLORS.particle, ANIMATION_TIMING.landingParticles, 55);
         }
         this.lastLand = true;
         break;
@@ -259,6 +333,11 @@
       this.camera = { x: 0, y: 0 };
       this.sound = new Sound();
       this.state = 'start';
+      this.difficultyKey = 'normal';
+      this.difficulty = DIFFICULTIES.normal;
+      this.nextPlatformId = 1;
+      this.destroyedPlatformIds = new Set();
+      this.messageTimers = new Set();
       this.stored = 0;
       this.unbanked = 0;
       this.score = 0;
@@ -266,6 +345,13 @@
       this.winShown = false;
       this.lastTime = 0;
       this.time = 0;
+      for (const timer of this.messageTimers) {
+        clearTimeout(timer);
+      }
+      this.messageTimers.clear();
+      this.difficulty = DIFFICULTIES[this.difficultyKey];
+      this.nextPlatformId = 1;
+      this.destroyedPlatformIds = new Set();
       this.highestGenerated = 0;
       this.checkpoint = { x: 540, y: 510 };
       this.checkpointPlatform = null;
@@ -274,6 +360,7 @@
       this.resize();
       this.generateInitialLevel();
       this.bindEvents();
+      this.updateDifficultyUi();
       requestAnimationFrame((time) => this.loop(time));
     }
 
@@ -287,6 +374,7 @@
       this.winShown = false;
       this.lastTime = 0;
       this.time = 0;
+      this.difficulty = DIFFICULTIES[this.difficultyKey];
       this.highestGenerated = 0;
       this.checkpoint = { x: 540, y: 510 };
       this.checkpointPlatform = null;
@@ -304,6 +392,7 @@
       ui.winScreen.classList.add('is-hidden');
       ui.fallScreen.classList.add('is-hidden');
       ui.messageStack.replaceChildren();
+      this.updateDifficultyUi();
     }
 
     resize() {
@@ -348,7 +437,7 @@
           difficulty,
           isStartingPlatform: platform.isStartingPlatform,
           variation: platform.widthFactor ?? 0.5
-        });
+        }) * (platform.type === PLATFORM_TYPES.SMALL ? 0.76 : 1);
         platform.x = center - platform.width / 2;
         platform.baseX = platform.x;
         const widthRatio = previousWidth ? platform.width / previousWidth : 1;
@@ -400,7 +489,8 @@
 
       return Math.min(
         availableWidth,
-        minimumWidth + (maximumWidth - minimumWidth) * clamp(variation, 0, 1)
+        (minimumWidth + (maximumWidth - minimumWidth) * clamp(variation, 0, 1))
+          * this.difficulty.platformScale
       );
     }
 
@@ -442,12 +532,15 @@
     generateInitialLevel() {
       const startingPlatformWidth = this.getPlatformWidth({ isStartingPlatform: true });
       const startingPlatform = {
+        id: this.nextPlatformId++,
         x: (this.worldWidth - startingPlatformWidth) / 2,
         y: this.startingY,
         width: startingPlatformWidth,
         height: clamp(18 * this.ledgeScale, 14, 22),
         hue: 184,
         moving: false,
+        type: PLATFORM_TYPES.NORMAL,
+        state: 'stable',
         isStartingPlatform: true,
         widthFactor: 0.5
       };
@@ -461,7 +554,7 @@
       this.player.y = this.checkpoint.y;
       this.highestGenerated = this.startingY;
 
-      for (let platformY = this.startingY - TUNE.platformGap; platformY > -2600; platformY -= TUNE.platformGap) {
+      for (let platformY = this.startingY - this.difficulty.platformGap; platformY > -2600; platformY -= this.difficulty.platformGap) {
         this.addPlatformTier(platformY);
       }
 
@@ -485,12 +578,14 @@
       const maximumHorizontalShift = this.isNarrowViewport
         ? clamp(this.viewWidth * 0.26, 70, 180)
         : 260;
-      const platformX = clamp(
+      const preferredX = clamp(
         previousPlatform.x + randomBetween(-maximumHorizontalShift, maximumHorizontalShift),
         this.levelPadding,
         this.worldWidth - platformWidth - this.levelPadding
       );
+      const platformX = this.findNonOverlappingPlatformX(platformY, platformWidth, preferredX);
       const platform = {
+        id: this.nextPlatformId++,
         x: platformX,
         baseX: platformX,
         y: platformY,
@@ -498,19 +593,47 @@
         widthFactor,
         height: clamp(16 * this.ledgeScale, 12, 20),
         hue: 182 + randomBetween(-18, 22),
-        moving: Math.random() < 0.1 + difficulty * 0.12,
+        moving: false,
         phase: randomBetween(0, 7),
         range: randomBetween(35, 90)
       };
 
+      const typeRoll = Math.random();
+      const movingChance = 0.1 + difficulty * 0.12;
+      const crumblingChance = this.difficultyKey === 'hard'
+        ? this.difficulty.breakingPlatformChance
+        : difficulty < 0.18 ? 0 : 0.1 + difficulty * 0.13;
+      const smallChance = difficulty < 0.28 ? 0 : 0.08 + difficulty * 0.1;
+
+      if (typeRoll < crumblingChance) {
+        platform.type = PLATFORM_TYPES.CRUMBLING;
+      } else if (typeRoll < crumblingChance + movingChance) {
+        platform.type = PLATFORM_TYPES.MOVING;
+        platform.moving = true;
+      } else if (typeRoll < crumblingChance + movingChance + smallChance) {
+        platform.type = PLATFORM_TYPES.SMALL;
+        platform.width *= 0.76;
+        platform.x = clamp(
+          platform.x + (platform.widthFactor > 0.5 ? platform.width : 0),
+          this.levelPadding,
+          this.worldWidth - platform.width - this.levelPadding
+        );
+        platform.baseX = platform.x;
+      } else {
+        platform.type = PLATFORM_TYPES.NORMAL;
+      }
+      platform.state = 'stable';
+      platform.crumbleTimer = 0;
+      platform.fallOffset = 0;
+
       this.platforms.push(platform);
 
-      if (Math.random() < TUNE.dropletSpawnChance) {
-        const dropCount = Math.random() < TUNE.extraDropletChance ? 2 : 1;
+      if (Math.random() < this.difficulty.dropletSpawnChance) {
+        const dropCount = Math.random() < this.difficulty.extraDropletChance ? 2 : 1;
         for (let dropIndex = 0; dropIndex < dropCount; dropIndex += 1) {
           this.droplets.push({
-            x: platformX + platformWidth * (dropIndex + 1) / (dropCount + 1),
-            y: platformY - randomBetween(24, 46),
+            x: platform.x + platform.width * (dropIndex + 1) / (dropCount + 1),
+            y: platform.y - randomBetween(24, 46),
             taken: false,
             phase: randomBetween(0, 7)
           });
@@ -519,27 +642,108 @@
 
       if (Math.random() < 0.16) {
         platform.station = true;
+        platform.type = PLATFORM_TYPES.NORMAL;
+        platform.moving = false;
       }
 
-      if (!platform.station && Math.random() < 0.22) {
+      if (!platform.station && Math.random() < this.difficulty.hazardFrequency) {
         const pollutionWidth = 24;
         platform.pollution = {
-          x: platformX + randomBetween(16, platformWidth - pollutionWidth - 16),
+          x: platform.x + randomBetween(16, platform.width - pollutionWidth - 16),
           y: platformY - 13,
           width: pollutionWidth,
           height: 13,
           offsetX: 0,
           cleared: false
         };
-        platform.pollution.offsetX = platform.pollution.x - platformX;
+        platform.pollution.offsetX = platform.pollution.x - platform.x;
       }
+    }
+
+    findNonOverlappingPlatformX(platformY, platformWidth, preferredX) {
+      const minimumX = this.levelPadding;
+      const maximumX = this.worldWidth - platformWidth - this.levelPadding;
+      const candidates = [preferredX];
+
+      for (let step = 1; step <= 8; step += 1) {
+        const offset = step * 24;
+        candidates.push(
+          clamp(preferredX - offset, minimumX, maximumX),
+          clamp(preferredX + offset, minimumX, maximumX)
+        );
+      }
+
+      const overlapsExistingPlatform = (candidateX) => this.platforms.some((platform) => {
+        const verticalOverlap = platformY < platform.y + platform.height + 8
+          && platformY + 16 + 8 > platform.y;
+        const horizontalOverlap = candidateX < platform.x + platform.width + 8
+          && candidateX + platformWidth + 8 > platform.x;
+        return platform.state !== 'destroyed' && verticalOverlap && horizontalOverlap;
+      });
+
+      return candidates.find((candidateX) => !overlapsExistingPlatform(candidateX)) ?? preferredX;
     }
 
     generateMorePlatforms() {
       while (this.highestGenerated > this.player.y - TUNE.generationAhead) {
-        this.highestGenerated -= TUNE.platformGap;
+        this.highestGenerated -= this.difficulty.platformGap;
         this.addPlatformTier(this.highestGenerated);
       }
+    }
+
+    selectDifficulty(difficultyKey) {
+      if (this.state !== 'start' || !DIFFICULTIES[difficultyKey]) {
+        return;
+      }
+
+      this.difficultyKey = difficultyKey;
+      this.difficulty = DIFFICULTIES[difficultyKey];
+      this.resetGame();
+    }
+
+    updateDifficultyUi() {
+      ui.difficultyValue.textContent = this.difficulty.label;
+      ui.winGoalLabel.textContent = this.difficulty.winScore;
+    }
+
+    startCrumble(platform) {
+      platform.state = 'cracking';
+      platform.crumbleTimer = 0;
+      this.sound.beep(260, 0.08, 'square');
+      this.message('UNSTABLE', COLORS.crumbleWarning);
+    }
+
+    updateCrumblingPlatforms(deltaTime) {
+      for (const platform of [...this.platforms]) {
+        if (platform.type !== PLATFORM_TYPES.CRUMBLING || platform.state === 'stable' || platform.state === 'destroyed') {
+          continue;
+        }
+
+        platform.crumbleTimer += deltaTime;
+        if (platform.state === 'cracking'
+          && platform.crumbleTimer >= this.difficulty.crumbleWarningDuration) {
+          platform.state = 'breaking';
+          platform.crumbleTimer = 0;
+          this.sound.beep(115, 0.16, 'sawtooth');
+          this.createParticles(platform.x + platform.width / 2, platform.y, COLORS.crumbleCrack, 8, 70);
+        } else if (platform.state === 'breaking') {
+          platform.fallOffset += TUNE.crumblingPlatform.fallSpeed * deltaTime;
+          if (platform.crumbleTimer >= this.difficulty.crumbleBreakingDuration) {
+            const debrisX = platform.x + platform.width / 2;
+            const debrisY = platform.y + platform.fallOffset;
+            this.particles = this.particles.filter((particle) => (
+              Math.hypot(particle.x - debrisX, particle.y - debrisY) > platform.width / 2
+            ));
+            this.destroyPlatform(platform);
+          }
+        }
+      }
+    }
+
+    destroyPlatform(platform) {
+      platform.state = 'destroyed';
+      this.destroyedPlatformIds.add(platform.id);
+      this.platforms = this.platforms.filter((candidate) => candidate.id !== platform.id);
     }
 
     bindEvents() {
@@ -552,12 +756,15 @@
         this.state = 'playing';
         ui.startScreen.classList.add('is-hidden');
       };
+      document.querySelectorAll('input[name="difficulty"]').forEach((input) => {
+        input.addEventListener('change', (event) => this.selectDifficulty(event.target.value));
+      });
       document.getElementById('resumeButton').onclick = () => this.togglePause();
       document.getElementById('continueButton').onclick = () => {
         this.state = 'playing';
         ui.winScreen.classList.add('is-hidden');
       };
-      document.getElementById('respawnButton').onclick = () => this.respawn();
+      document.getElementById('respawnButton').onclick = () => this.resetGame();
       document.getElementById('pauseButton').onclick = () => this.togglePause();
       document.getElementById('resetButton').onclick = () => this.resetGame();
       document.getElementById('muteButton').onclick = (event) => {
@@ -693,38 +900,40 @@
       }
     }
 
-    respawn() {
-      this.state = 'playing';
-      ui.fallScreen.classList.add('is-hidden');
-      this.unbanked = 0;
-      this.restoreCheckpointPlatform();
-      this.player.x = this.checkpoint.x;
-      this.player.y = this.checkpoint.y;
+    fall() {
+      if (this.state !== 'playing') {
+        return;
+      }
+
+      this.state = 'dying';
+      keys.clear();
       this.player.velocityX = 0;
       this.player.velocityY = 0;
-      this.camera.y = this.player.y - this.viewHeight * 0.63;
-    }
-
-    fall() {
-      this.state = 'fallen';
+      ui.finalScoreValue.textContent = this.score;
+      ui.fallSummary.textContent = `${this.unbanked} carried · ${this.stored} stored.`;
       ui.fallScreen.classList.remove('is-hidden');
-      this.unbanked = 0;
       this.sound.beep(90, 0.25, 'sawtooth');
     }
 
     restoreCheckpointPlatform() {
-      if (!this.checkpointPlatform) {
+      if (!this.checkpointPlatform || this.destroyedPlatformIds.has(this.checkpointPlatform.id)) {
         return;
       }
 
       const platformExists = this.platforms.some((platform) => (
-        platform.x === this.checkpointPlatform.x
-        && platform.y === this.checkpointPlatform.y
-        && platform.width === this.checkpointPlatform.width
+        platform.id === this.checkpointPlatform.id
+        || (platform.x === this.checkpointPlatform.x
+          && platform.y === this.checkpointPlatform.y
+          && platform.width === this.checkpointPlatform.width)
       ));
 
       if (!platformExists) {
-        this.platforms.unshift({ ...this.checkpointPlatform });
+        this.platforms.unshift({
+          ...this.checkpointPlatform,
+          state: 'stable',
+          crumbleTimer: 0,
+          fallOffset: 0
+        });
       }
     }
 
@@ -734,12 +943,17 @@
       messageElement.textContent = text;
       messageElement.style.color = color;
       ui.messageStack.appendChild(messageElement);
-      setTimeout(() => messageElement.remove(), 1400);
+      const timer = setTimeout(() => {
+        this.messageTimers.delete(timer);
+        messageElement.remove();
+      }, ANIMATION_TIMING.fastFeedback);
+      this.messageTimers.add(timer);
     }
 
     update(deltaTime) {
       this.time += deltaTime;
       this.updateMovingPlatforms();
+      this.updateCrumblingPlatforms(deltaTime);
       this.player.update(this, deltaTime);
       this.collectDroplets();
       this.handlePollution();
@@ -773,6 +987,8 @@
     removeOutOfViewPlatforms() {
       const lowestVisibleY = this.camera.y + this.viewHeight;
       this.platforms = this.platforms.filter((platform) => platform.y <= lowestVisibleY);
+      this.platforms = this.platforms.filter((platform) => platform.state !== 'destroyed'
+        || platform.y <= this.camera.y + this.viewHeight + 80);
       this.droplets = this.droplets.filter((droplet) => !droplet.taken && droplet.y <= lowestVisibleY);
     }
 
@@ -791,12 +1007,14 @@
     }
 
     checkWinCondition() {
-      if (this.winShown || this.score < 750) {
+      if (this.winShown || this.score < this.difficulty.winScore) {
         return;
       }
 
       this.winShown = true;
       this.state = 'won';
+      ui.winGoalLabel.textContent = this.difficulty.winScore;
+      ui.winScoreValue.textContent = this.score;
       ui.winScreen.classList.remove('is-hidden');
       this.sound.beep(740, 0.14, 'sine');
     }
@@ -856,24 +1074,84 @@
       context.translate(-this.camera.x, -this.camera.y);
 
       for (const platform of this.platforms) {
+        if (platform.state === 'destroyed' || this.destroyedPlatformIds.has(platform.id)) {
+          continue;
+        }
+
         const outsideViewport = platform.y < this.camera.y - 40 || platform.y > this.camera.y + this.viewHeight + 40;
         if (outsideViewport) {
           continue;
         }
 
-        context.fillStyle = `hsl(${platform.hue}, 48%, 39%)`;
-        context.fillRect(platform.x, platform.y, platform.width, platform.height);
-        context.fillStyle = COLORS.platformTop;
-        context.fillRect(platform.x, platform.y, platform.width, 4);
+        const isCracking = platform.state === 'cracking' || platform.state === 'breaking';
+        const warningProgress = platform.state === 'breaking'
+          ? 1
+          : isCracking
+            ? clamp(platform.crumbleTimer / this.difficulty.crumbleWarningDuration, 0, 1)
+            : 0;
+        const shake = isCracking
+          ? Math.sin(this.time * (10 + warningProgress * 18)) * (1 + warningProgress * 3)
+          : 0;
+        const drawX = platform.x + shake;
+        const drawY = platform.y + (platform.state === 'breaking' ? platform.fallOffset : 0);
+        const platformHue = platform.type === PLATFORM_TYPES.MOVING
+          ? 205
+          : platform.type === PLATFORM_TYPES.SMALL
+            ? 270
+            : platform.hue;
+
+        context.save();
+        context.shadowColor = 'rgba(3, 15, 35, 0.38)';
+        context.shadowBlur = 0;
+        context.shadowOffsetY = 4;
+        context.fillStyle = `hsl(${platformHue}, 48%, 39%)`;
+        this.drawRoundedRect(drawX, drawY, platform.width, platform.height, 3);
+        context.fill();
+        context.shadowColor = 'transparent';
+        context.fillStyle = isCracking ? COLORS.crumbleWarning : COLORS.platformTop;
+        this.drawRoundedRect(drawX, drawY, platform.width, 4, 2);
+        context.fill();
+        context.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        context.fillRect(drawX + 5, drawY + platform.height - 3, Math.max(0, platform.width - 10), 1);
+        context.restore();
+
+        if (platform.type === PLATFORM_TYPES.MOVING) {
+          context.strokeStyle = '#b7d8ff';
+          context.lineWidth = 2;
+          context.beginPath();
+          context.moveTo(drawX + 10, drawY + 9);
+          context.lineTo(drawX + 18, drawY + 9);
+          context.moveTo(drawX + platform.width - 18, drawY + 9);
+          context.lineTo(drawX + platform.width - 10, drawY + 9);
+          context.stroke();
+        }
+
+        if (platform.type === PLATFORM_TYPES.SMALL) {
+          context.fillStyle = '#d7b8ff';
+          context.fillRect(drawX + platform.width / 2 - 2, drawY + 7, 4, platform.height - 9);
+        }
+
+        if (isCracking) {
+          context.strokeStyle = COLORS.crumbleCrack;
+          context.lineWidth = 1.5 + warningProgress;
+          context.beginPath();
+          context.moveTo(drawX + platform.width * 0.25, drawY + 3);
+          context.lineTo(drawX + platform.width * 0.34, drawY + 9);
+          context.lineTo(drawX + platform.width * 0.3, drawY + platform.height - 1);
+          context.moveTo(drawX + platform.width * 0.68, drawY + 3);
+          context.lineTo(drawX + platform.width * 0.6, drawY + 8);
+          context.lineTo(drawX + platform.width * 0.72, drawY + platform.height - 1);
+          context.stroke();
+        }
 
         if (platform.station) {
-          const tankX = platform.x + platform.width / 2 - 19;
-          const tankY = platform.y - 29;
+          const tankX = drawX + platform.width / 2 - 19;
+          const tankY = drawY - 29;
 
           context.fillStyle = COLORS.station;
           context.fillRect(tankX, tankY + 5, 38, 24);
           context.beginPath();
-          context.arc(platform.x + platform.width / 2, tankY + 5, 19, Math.PI, 0);
+          context.arc(drawX + platform.width / 2, tankY + 5, 19, Math.PI, 0);
           context.fill();
           context.fillStyle = COLORS.tankWater;
           context.fillRect(tankX + 4, tankY + 16, 30, 9);
@@ -885,16 +1163,16 @@
 
           context.fillStyle = COLORS.playerHighlight;
           context.beginPath();
-          context.moveTo(platform.x + platform.width / 2, tankY + 9);
-          context.quadraticCurveTo(platform.x + platform.width / 2 + 5, tankY + 15, platform.x + platform.width / 2, tankY + 19);
-          context.quadraticCurveTo(platform.x + platform.width / 2 - 5, tankY + 15, platform.x + platform.width / 2, tankY + 9);
+          context.moveTo(drawX + platform.width / 2, tankY + 9);
+          context.quadraticCurveTo(drawX + platform.width / 2 + 5, tankY + 15, drawX + platform.width / 2, tankY + 19);
+          context.quadraticCurveTo(drawX + platform.width / 2 - 5, tankY + 15, drawX + platform.width / 2, tankY + 9);
           context.fill();
         }
 
         const pollution = platform.pollution;
         if (pollution && !pollution.cleared) {
-          const trashX = pollution.x;
-          const trashY = pollution.y;
+          const trashX = drawX + pollution.offsetX;
+          const trashY = drawY - 13;
 
           context.fillStyle = COLORS.pollution;
           context.fillRect(trashX + 3, trashY + 3, pollution.width - 6, pollution.height);
@@ -923,6 +1201,22 @@
       }
 
       context.restore();
+    }
+
+    drawRoundedRect(x, y, width, height, radius) {
+      const right = x + width;
+      const bottom = y + height;
+      context.beginPath();
+      context.moveTo(x + radius, y);
+      context.lineTo(right - radius, y);
+      context.quadraticCurveTo(right, y, right, y + radius);
+      context.lineTo(right, bottom - radius);
+      context.quadraticCurveTo(right, bottom, right - radius, bottom);
+      context.lineTo(x + radius, bottom);
+      context.quadraticCurveTo(x, bottom, x, bottom - radius);
+      context.lineTo(x, y + radius);
+      context.quadraticCurveTo(x, y, x + radius, y);
+      context.closePath();
     }
 
     drawDroplets() {
