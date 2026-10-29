@@ -14,6 +14,18 @@
     extraDropletChance: 0.3,
     fallLimit: 220,
     generationAhead: 1200,
+    platformSizing: {
+      referenceWidth: 1100,
+      minimumScale: 0.62,
+      maximumScale: 1,
+      startingWidth: 320,
+      startingMinimumWidth: 180,
+      startingMaximumRatio: 0.62,
+      minimumWidth: 88,
+      maximumWidth: 235,
+      minimumRatio: 0.24,
+      maximumRatio: 0.58
+    },
     maxDt: 0.033
   };
 
@@ -283,6 +295,9 @@
       this.particles = [];
       this.camera = { x: 0, y: 0 };
       this.player = new Player(this.checkpoint.x, this.checkpoint.y);
+      this.startingY = this.isNarrowViewport
+        ? clamp(this.viewHeight * 0.72, 180, 570)
+        : 570;
       this.generateInitialLevel();
       ui.startScreen.classList.remove('is-hidden');
       ui.pauseScreen.classList.add('is-hidden');
@@ -299,22 +314,161 @@
       context.setTransform(deviceScale, 0, 0, deviceScale, 0, 0);
       this.viewWidth = window.innerWidth;
       this.viewHeight = window.innerHeight;
+      this.isNarrowViewport = this.viewWidth <= TUNE.platformSizing.referenceWidth;
+      this.worldWidth = this.isNarrowViewport
+        ? this.viewWidth
+        : Math.max(TUNE.platformSizing.referenceWidth, this.viewWidth);
+      this.ledgeScale = clamp(
+        this.viewWidth / TUNE.platformSizing.referenceWidth,
+        TUNE.platformSizing.minimumScale,
+        TUNE.platformSizing.maximumScale
+      );
+      if (this.startingY === undefined) {
+        this.startingY = this.isNarrowViewport
+          ? clamp(this.viewHeight * 0.72, 180, 570)
+          : 570;
+      }
+      this.levelPadding = this.isNarrowViewport
+        ? clamp(this.viewWidth * 0.05, 12, 28)
+        : 40;
+
+      if (this.platforms.length) {
+        this.scaleExistingLedges();
+        this.constrainLevelToViewport();
+      }
+    }
+
+    scaleExistingLedges() {
+      for (const platform of this.platforms) {
+        const previousX = platform.x;
+        const previousWidth = platform.width;
+        const center = platform.x + platform.width / 2;
+        const difficulty = clamp((this.startingY - platform.y) / 1700, 0, 1);
+        platform.width = this.getPlatformWidth({
+          difficulty,
+          isStartingPlatform: platform.isStartingPlatform,
+          variation: platform.widthFactor ?? 0.5
+        });
+        platform.x = center - platform.width / 2;
+        platform.baseX = platform.x;
+        const widthRatio = previousWidth ? platform.width / previousWidth : 1;
+        platform.height = clamp(platform.height * widthRatio, 12, 22);
+
+        for (const droplet of this.droplets) {
+          const belongsToPlatform = droplet.y >= platform.y - 46
+            && droplet.y <= platform.y
+            && droplet.x >= previousX
+            && droplet.x <= previousX + previousWidth;
+
+          if (belongsToPlatform) {
+            droplet.x = platform.x + (droplet.x - previousX) * widthRatio;
+          }
+        }
+
+        if (platform.pollution) {
+          platform.pollution.offsetX *= widthRatio;
+          platform.pollution.x = platform.x + platform.pollution.offsetX;
+        }
+      }
+    }
+
+    getPlatformWidth({ difficulty = 0, isStartingPlatform = false, variation = 0.5 } = {}) {
+      const sizing = TUNE.platformSizing;
+      const availableWidth = Math.max(0, this.worldWidth - this.levelPadding * 2);
+
+      if (isStartingPlatform) {
+        return Math.min(
+          availableWidth,
+          clamp(
+            sizing.startingWidth * this.ledgeScale,
+            sizing.startingMinimumWidth,
+            this.viewWidth * sizing.startingMaximumRatio
+          )
+        );
+      }
+
+      const minimumWidth = clamp(
+        (120 - difficulty * 20) * this.ledgeScale,
+        sizing.minimumWidth,
+        this.viewWidth * sizing.minimumRatio
+      );
+      const maximumWidth = clamp(
+        (235 - difficulty * 30) * this.ledgeScale,
+        minimumWidth,
+        Math.min(sizing.maximumWidth, this.viewWidth * sizing.maximumRatio)
+      );
+
+      return Math.min(
+        availableWidth,
+        minimumWidth + (maximumWidth - minimumWidth) * clamp(variation, 0, 1)
+      );
+    }
+
+    constrainLevelToViewport() {
+      const maximumPlatformWidth = this.worldWidth - this.levelPadding * 2;
+
+      for (const platform of this.platforms) {
+        platform.width = Math.min(platform.width, maximumPlatformWidth);
+        platform.x = clamp(platform.x, this.levelPadding, this.worldWidth - platform.width - this.levelPadding);
+        platform.baseX = clamp(platform.baseX ?? platform.x, this.levelPadding, this.worldWidth - platform.width - this.levelPadding);
+        platform.range = Math.min(platform.range || 0, Math.max(0, (this.worldWidth - platform.width) / 2 - this.levelPadding));
+
+        if (this.checkpointPlatform && platform.y === this.checkpointPlatform.y) {
+          this.checkpointPlatform = { ...platform };
+        }
+
+        if (platform.pollution) {
+          platform.pollution.offsetX = clamp(
+            platform.pollution.offsetX,
+            8,
+            Math.max(8, platform.width - platform.pollution.width - 8)
+          );
+          platform.pollution.x = platform.x + platform.pollution.offsetX;
+        }
+      }
+
+      for (const droplet of this.droplets) {
+        droplet.x = clamp(droplet.x, this.levelPadding, this.worldWidth - this.levelPadding);
+      }
+
+      this.player.x = clamp(this.player.x, this.levelPadding, this.worldWidth - this.player.width - this.levelPadding);
+      this.checkpoint.x = clamp(
+        this.checkpoint.x,
+        this.levelPadding,
+        this.worldWidth - this.player.width - this.levelPadding
+      );
     }
 
     generateInitialLevel() {
-      const startingPlatform = { x: 390, y: 570, width: 320, height: 18, hue: 184, moving: false };
+      const startingPlatformWidth = this.getPlatformWidth({ isStartingPlatform: true });
+      const startingPlatform = {
+        x: (this.worldWidth - startingPlatformWidth) / 2,
+        y: this.startingY,
+        width: startingPlatformWidth,
+        height: clamp(18 * this.ledgeScale, 14, 22),
+        hue: 184,
+        moving: false,
+        isStartingPlatform: true,
+        widthFactor: 0.5
+      };
       this.platforms.push(startingPlatform);
       this.checkpointPlatform = { ...startingPlatform };
-      this.highestGenerated = 570;
+      this.checkpoint = {
+        x: startingPlatform.x + startingPlatform.width / 2 - this.player.width / 2,
+        y: startingPlatform.y - this.player.height
+      };
+      this.player.x = this.checkpoint.x;
+      this.player.y = this.checkpoint.y;
+      this.highestGenerated = this.startingY;
 
-      for (let platformY = 478; platformY > -2600; platformY -= TUNE.platformGap) {
+      for (let platformY = this.startingY - TUNE.platformGap; platformY > -2600; platformY -= TUNE.platformGap) {
         this.addPlatformTier(platformY);
       }
 
       const starterDrops = [
-        { x: 490, y: 525 },
-        { x: 635, y: 430 },
-        { x: 350, y: 335 }
+        { x: startingPlatform.x + startingPlatform.width * 0.31, y: this.startingY - 45 },
+        { x: startingPlatform.x + startingPlatform.width * 0.77, y: this.startingY - 140 },
+        { x: startingPlatform.x + startingPlatform.width * 0.08, y: this.startingY - 235 }
       ];
       this.droplets.push(...starterDrops.map((point) => ({
         ...point,
@@ -324,16 +478,25 @@
     }
 
     addPlatformTier(platformY) {
-      const difficulty = clamp((570 - platformY) / 1700, 0, 1);
-      const platformWidth = randomBetween(120 - difficulty * 20, 235 - difficulty * 30);
+      const difficulty = clamp((this.startingY - platformY) / 1700, 0, 1);
+      const widthFactor = Math.random();
+      const platformWidth = this.getPlatformWidth({ difficulty, variation: widthFactor });
       const previousPlatform = this.platforms[this.platforms.length - 1];
-      const platformX = clamp(previousPlatform.x + randomBetween(-260, 260), 40, this.worldWidth - platformWidth - 40);
+      const maximumHorizontalShift = this.isNarrowViewport
+        ? clamp(this.viewWidth * 0.26, 70, 180)
+        : 260;
+      const platformX = clamp(
+        previousPlatform.x + randomBetween(-maximumHorizontalShift, maximumHorizontalShift),
+        this.levelPadding,
+        this.worldWidth - platformWidth - this.levelPadding
+      );
       const platform = {
         x: platformX,
         baseX: platformX,
         y: platformY,
         width: platformWidth,
-        height: 16,
+        widthFactor,
+        height: clamp(16 * this.ledgeScale, 12, 20),
         hue: 182 + randomBetween(-18, 22),
         moving: Math.random() < 0.1 + difficulty * 0.12,
         phase: randomBetween(0, 7),
@@ -428,6 +591,7 @@
       const button = document.getElementById(elementId);
       button.addEventListener('pointerdown', (event) => {
         event.preventDefault();
+        button.setPointerCapture?.(event.pointerId);
         keys.add(key);
       });
       button.addEventListener('pointerup', () => keys.delete(key));
@@ -594,7 +758,11 @@
     updateMovingPlatforms() {
       for (const platform of this.platforms) {
         if (platform.moving) {
-          platform.x = platform.baseX + Math.sin(this.time * 0.8 + platform.phase) * platform.range;
+          platform.x = clamp(
+            platform.baseX + Math.sin(this.time * 0.8 + platform.phase) * platform.range,
+            this.levelPadding,
+            this.worldWidth - platform.width - this.levelPadding
+          );
         }
         if (platform.pollution) {
           platform.pollution.x = platform.x + platform.pollution.offsetX;
@@ -609,7 +777,7 @@
     }
 
     updateHeightAndScore() {
-      const height = Math.max(0, Math.floor((570 - this.player.y) / 5));
+      const height = Math.max(0, Math.floor((this.startingY - this.player.y) / 5));
       if (height <= this.maxHeight) {
         return;
       }

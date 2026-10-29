@@ -2,6 +2,8 @@
 
 Cloudwell is a small, original vertical platforming game built with HTML5 Canvas, CSS, and vanilla JavaScript. Climb through a procedurally extended sky, collect water droplets, and reach a glowing storage station before a fall costs your unbanked water. The game features charity: water-inspired clean-water branding and themes.
 
+The playfield is responsive: phones and tablets lock the game world to the visible viewport, and platform widths and horizontal spacing scale down to keep the route visible and reachable. Desktop layouts retain a wider playfield.
+
 ## Run
 
 Open `index.html` directly in a browser, or serve the folder with any static web server:
