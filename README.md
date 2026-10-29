@@ -27,6 +27,8 @@ Then visit `http://localhost:4173`.
 
 Stored water is permanent. Platforms and their off-screen droplets disappear after they scroll below the viewport, so falling past the visible ledges ends the run. Avoid garbage on platforms: touching pollution removes one unbanked drop, while stored water remains safe. Reaching 750 points displays a win screen with the option to continue climbing. Unbanked water is also lost when the player falls, while the last storage station becomes the next respawn point.
 
+The game uses one synthesized Web Audio system in `game.js`; it does not require downloaded audio files. It provides feedback for collection, missed water/pollution, buttons, falling, winning, and score milestones, and only initializes after a user interaction. Score milestones are defined in the `MILESTONE_MESSAGES` array, displayed once when their thresholds are reached, and shown in a prominent animated notification with a brief score pulse.
+
 ## Project layout
 
 - `index.html`: game shell, HUD, menus, and touch controls

@@ -157,6 +157,21 @@ canvas {
   color: var(--color-sun);
 }
 
+.score-panel.is-milestone {
+  animation: score-pulse 650ms ease-out;
+}
+
+@keyframes score-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  45% {
+    transform: scale(1.12);
+  }
+}
+
 .hud-actions {
   position: absolute;
   top: max(12px, env(safe-area-inset-top));
@@ -489,6 +504,73 @@ h2 {
   animation: float-up 1.35s ease-out forwards;
 }
 
+.milestone-notification {
+  position: absolute;
+  top: clamp(150px, 25vh, 230px);
+  left: 50%;
+  z-index: 5;
+  display: grid;
+  width: min(390px, calc(100vw - 32px));
+  gap: 7px;
+  padding: 18px 24px 16px;
+  border: 1px solid rgba(98, 232, 226, 0.75);
+  border-radius: 12px;
+  color: var(--color-ink);
+  background: linear-gradient(135deg, rgba(8, 39, 68, 0.97), rgba(11, 67, 87, 0.94));
+  box-shadow: 0 12px 35px rgba(2, 14, 34, 0.42), 0 0 26px rgba(98, 232, 226, 0.18);
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.milestone-notification[hidden] {
+  display: none;
+}
+
+.milestone-notification.is-milestone-visible {
+  animation: milestone-reveal 2300ms ease-out forwards;
+}
+
+.milestone-kicker {
+  color: var(--color-aqua);
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.2em;
+}
+
+.milestone-notification strong {
+  color: var(--color-sun);
+  font-size: clamp(22px, 5vw, 32px);
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.milestone-score {
+  color: var(--color-muted);
+  font: 12px var(--font-mono);
+}
+
+.milestone-score b {
+  color: var(--color-ink);
+}
+
+@keyframes milestone-reveal {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px) scale(0.94);
+  }
+
+  13%,
+  78% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-18px) scale(0.98);
+  }
+}
+
 @keyframes float-up {
   from {
     opacity: 0;
@@ -620,6 +702,11 @@ h2 {
 }
 
 @media (max-width: 700px) {
+  .milestone-notification {
+    top: clamp(135px, 22vh, 190px);
+    padding: 15px 18px 14px;
+  }
+
   .difficulty-options {
     gap: 6px;
   }
@@ -670,5 +757,9 @@ h2 {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  .milestone-notification.is-milestone-visible {
+    animation: none;
   }
 }

@@ -39,6 +39,15 @@
     landingParticles: 6
   };
 
+  const MILESTONE_MESSAGES = [
+    { score: 10, text: 'Halfway there!' },
+    { score: 25, text: 'Great start!' },
+    { score: 50, text: 'Keep climbing!' },
+    { score: 100, text: 'You are on a roll!' },
+    { score: 250, text: 'The well is getting closer!' },
+    { score: 500, text: 'Almost to the goal!' }
+  ];
+
   const COLORS = {
     player: '#62e8e2',
     playerHighlight: '#dffaff',
@@ -111,6 +120,10 @@
     unbankedValue: document.getElementById('unbankedValue'),
     heightValue: document.getElementById('heightValue'),
     scoreValue: document.getElementById('scoreValue'),
+    scorePanel: document.getElementById('scorePanel'),
+    milestoneNotification: document.getElementById('milestoneNotification'),
+    milestoneMessage: document.getElementById('milestoneMessage'),
+    milestoneScore: document.getElementById('milestoneScore'),
     startScreen: document.getElementById('startScreen'),
     pauseScreen: document.getElementById('pauseScreen'),
     winScreen: document.getElementById('winScreen'),
@@ -302,7 +315,28 @@
     }
 
     init() {
-      this.context ||= new AudioContext();
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        return;
+      }
+
+      this.context ||= new AudioContextClass();
+      if (this.context.state === 'suspended') {
+        this.context.resume();
+      }
+    }
+
+    click() {
+      this.init();
+      this.beep(300, 0.045, 'square');
+    }
+
+    milestone() {
+      this.init();
+      this.beep(520, 0.09, 'sine');
+      if (this.context) {
+        window.setTimeout(() => this.beep(780, 0.13, 'sine'), 75);
+      }
     }
 
     beep(frequency, duration, type = 'sine') {
@@ -338,6 +372,9 @@
       this.nextPlatformId = 1;
       this.destroyedPlatformIds = new Set();
       this.messageTimers = new Set();
+      this.milestoneTimer = null;
+      this.scorePulseTimer = null;
+      this.milestoneIndex = 0;
       this.stored = 0;
       this.unbanked = 0;
       this.score = 0;
@@ -366,6 +403,16 @@
 
     resetGame() {
       keys.clear();
+      if (this.milestoneTimer) {
+        clearTimeout(this.milestoneTimer);
+        this.milestoneTimer = null;
+      }
+      if (this.scorePulseTimer) {
+        clearTimeout(this.scorePulseTimer);
+        this.scorePulseTimer = null;
+      }
+      ui.milestoneNotification.hidden = true;
+      ui.scorePanel.classList.remove('is-milestone');
       this.state = 'start';
       this.stored = 0;
       this.unbanked = 0;
@@ -750,24 +797,43 @@
       window.addEventListener('keyup', (event) => keys.delete(event.key));
 
       document.getElementById('startButton').onclick = () => {
-        this.sound.init();
+        this.sound.click();
         this.state = 'playing';
         ui.startScreen.classList.add('is-hidden');
       };
       document.querySelectorAll('input[name="difficulty"]').forEach((input) => {
-        input.addEventListener('change', (event) => this.selectDifficulty(event.target.value));
+        input.addEventListener('change', (event) => {
+          this.sound.click();
+          this.selectDifficulty(event.target.value);
+        });
       });
-      document.getElementById('resumeButton').onclick = () => this.togglePause();
+      document.getElementById('resumeButton').onclick = () => {
+        this.sound.click();
+        this.togglePause();
+      };
       document.getElementById('continueButton').onclick = () => {
+        this.sound.click();
         this.state = 'playing';
         ui.winScreen.classList.add('is-hidden');
       };
-      document.getElementById('respawnButton').onclick = () => this.resetGame();
-      document.getElementById('pauseButton').onclick = () => this.togglePause();
-      document.getElementById('resetButton').onclick = () => this.resetGame();
+      document.getElementById('respawnButton').onclick = () => {
+        this.sound.click();
+        this.resetGame();
+      };
+      document.getElementById('pauseButton').onclick = () => {
+        this.sound.click();
+        this.togglePause();
+      };
+      document.getElementById('resetButton').onclick = () => {
+        this.sound.click();
+        this.resetGame();
+      };
       document.getElementById('muteButton').onclick = (event) => {
         this.sound.muted = !this.sound.muted;
         event.currentTarget.textContent = this.sound.muted ? '×' : '♫';
+        if (!this.sound.muted) {
+          this.sound.click();
+        }
       };
 
       this.bindTouchButton('leftTouch', 'ArrowLeft');
@@ -948,6 +1014,35 @@
       this.messageTimers.add(timer);
     }
 
+    showMilestone(milestone) {
+      ui.milestoneMessage.textContent = milestone.text;
+      ui.milestoneScore.textContent = this.score;
+      ui.milestoneNotification.hidden = false;
+      ui.milestoneNotification.classList.remove('is-milestone-visible');
+      void ui.milestoneNotification.offsetWidth;
+      ui.milestoneNotification.classList.add('is-milestone-visible');
+
+      if (this.milestoneTimer) {
+        clearTimeout(this.milestoneTimer);
+      }
+      this.milestoneTimer = setTimeout(() => {
+        ui.milestoneNotification.hidden = true;
+        this.milestoneTimer = null;
+      }, 2300);
+
+      ui.scorePanel.classList.remove('is-milestone');
+      void ui.scorePanel.offsetWidth;
+      ui.scorePanel.classList.add('is-milestone');
+      if (this.scorePulseTimer) {
+        clearTimeout(this.scorePulseTimer);
+      }
+      this.scorePulseTimer = setTimeout(() => {
+        ui.scorePanel.classList.remove('is-milestone');
+        this.scorePulseTimer = null;
+      }, 650);
+      this.sound.milestone();
+    }
+
     update(deltaTime) {
       this.time += deltaTime;
       this.updateMovingPlatforms();
@@ -960,6 +1055,7 @@
       this.updateCamera(deltaTime);
       this.removeOutOfViewPlatforms();
       this.updateParticles(deltaTime);
+      this.checkMilestones();
       this.checkWinCondition();
 
       if (this.player.y - this.camera.y > this.viewHeight + TUNE.fallLimit) {
@@ -1002,6 +1098,15 @@
         this.sound.beep(800, 0.12, 'triangle');
       }
       this.maxHeight = height;
+    }
+
+    checkMilestones() {
+      while (this.milestoneIndex < MILESTONE_MESSAGES.length
+        && this.score >= MILESTONE_MESSAGES[this.milestoneIndex].score) {
+        const milestone = MILESTONE_MESSAGES[this.milestoneIndex];
+        this.showMilestone(milestone);
+        this.milestoneIndex += 1;
+      }
     }
 
     checkWinCondition() {
